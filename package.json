@@ -1,16 +1,16 @@
 {
-  "name": "laam-payment",
+  "name": "eth-fork-test",
   "version": "1.0.0",
-  "main": "server.js",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "npx hardhat node",
+    "deploy": "npx hardhat run scripts/deploy.js --network localhost"
   },
-  "engines": {
-    "node": "18.x"
+  "devDependencies": {
+    "hardhat": "^2.17.0"
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "ws": "^8.13.0",
-    "dotenv": "^16.3.1"
+    "@openzeppelin/contracts": "^4.9.3",
+    "ethers": "^6.9.0"
   }
 }
