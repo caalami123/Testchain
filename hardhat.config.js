@@ -6,7 +6,7 @@ module.exports = {
   networks: {
     localhost: {
       url: "http://127.0.0.1:8545",
-      accounts: { mnemonic: process.env.MNEMONIC || "test test test test test test test test test test test junk" }
+      accounts: { mnemonic: process.env.MNEMONIC }
     }
   }
 };
