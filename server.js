@@ -1,74 +1,79 @@
 const express = require("express");
+const { ethers } = require("ethers");
 const cors = require("cors");
+
 const app = express();
 app.use(cors());
 app.use(express.json());
 
-// SIMPLE GASLESS LEDGER
-let wallets = {};
-let balances = {};  // token balances
-let ledger = [];    // fake blockchain blocks
+// Hardhat gas-free provider
+const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
 
-// Create wallet (gasless network)
-app.post("/createWallet", (req,res)=>{
-    const { randomUUID } = require("crypto");
+// TOKEN INFO
+const tokenAddress = "PUT_YOUR_DEPLOYED_TOKEN_ADDRESS_HERE";
 
-    const privateKey = randomUUID().replace(/-/g,"");
-    const address = "WALLET-" + privateKey.slice(0,8);
+const tokenAbi = [
+    "function balanceOf(address) view returns(uint256)",
+    "function transfer(address,uint256) returns(bool)",
+    "function mint(address,uint256)"
+];
 
-    // Save
-    wallets[address] = privateKey;
+const token = new ethers.Contract(tokenAddress, tokenAbi, provider);
 
-    // Mint 100 tokens Free
-    balances[address] = 100;
+// ⛽ Gas-free deployer (first account)
+let deployerSigner;
+(async () => {
+    const accounts = await provider.listAccounts();
+    deployerSigner = await provider.getSigner(accounts[0]);
+})();
 
-    ledger.push({
-        from: "GENESIS",
-        to: address,
-        amount: 100,
-        time: Date.now()
+// ⭐ 1) Create wallet + auto mint 100 TT
+app.post("/createWallet", async (req,res)=>{
+    const wallet = ethers.Wallet.createRandom();
+    const signer = deployerSigner;
+
+    await token.connect(signer).mint(wallet.address, ethers.parseUnits("100",18));
+
+    res.json({
+        address: wallet.address,
+        privateKey: wallet.privateKey
     });
-
-    res.json({ address, privateKey });
 });
 
-// Import wallet
-app.post("/importWallet", (req,res)=>{
-    const key = req.body.privateKey;
-    if(!key) return res.json({error:"No private key"});
-
-    const address = "WALLET-" + key.slice(0,8);
-    wallets[address] = key;
-
-    if(!balances[address]) balances[address] = 0;
-
-    res.json({ address, privateKey:key });
+// ⭐ 2) Import wallet
+app.post("/importWallet", async (req,res)=>{
+    try {
+        const wallet = new ethers.Wallet(req.body.privateKey);
+        res.json({ address: wallet.address, privateKey: wallet.privateKey });
+    } catch {
+        res.json({ error: "Invalid private key" });
+    }
 });
 
-// Send tokens
-app.post("/send", (req,res)=>{
+// ⭐ 3) Transfer tokens (gas-free)
+app.post("/sendToken", async (req,res)=>{
     const { fromPrivateKey, to, amount } = req.body;
+    try {
+        const signer = new ethers.Wallet(fromPrivateKey, provider);
+        const tokenWithSigner = token.connect(signer);
 
-    const from = "WALLET-" + fromPrivateKey.slice(0,8);
-    if(balances[from] < amount) return res.json({error:"Not enough tokens"});
+        const tx = await tokenWithSigner.transfer(to, ethers.parseUnits(amount.toString(),18));
+        await tx.wait();
 
-    balances[from] -= amount;
-    balances[to] = (balances[to] || 0) + Number(amount);
-
-    ledger.push({
-        from,
-        to,
-        amount,
-        time: Date.now()
-    });
-
-    res.json({ status:"success" });
+        res.json({ txHash: tx.hash });
+    } catch (e) {
+        res.json({ error: e.message });
+    }
 });
 
-// Check balance
-app.get("/balance/:address",(req,res)=>{
-    const address = req.params.address;
-    res.json({ balance: balances[address] || 0 });
+// ⭐ 4) Check balance
+app.get("/balance/:address", async (req,res)=>{
+    try {
+        const bal = await token.balanceOf(req.params.address);
+        res.json({ balance: ethers.formatUnits(bal,18) });
+    } catch {
+        res.json({ error: "Invalid address" });
+    }
 });
 
-app.listen(3000,()=>console.log("GASLESS blockchain running"));
+app.listen(3000, ()=> console.log("Backend running on 3000"));
