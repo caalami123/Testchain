@@ -3,7 +3,7 @@ async function main() {
     console.log("Deploying contract with account:", deployer.address);
 
     const Token = await ethers.getContractFactory("MyToken");
-    const token = await Token.deploy(ethers.parseUnits("1000000", 18)); // 1,000,000 MTK
+    const token = await Token.deploy(ethers.parseUnits("1000000", 18));
     await token.deployed();
 
     console.log("Token deployed to:", token.address);
