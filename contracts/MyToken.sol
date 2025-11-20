@@ -2,29 +2,31 @@
 pragma solidity ^0.8.20;
 
 contract MyToken {
-    string public name = "MyToken";
-    string public symbol = "MTK";
+    string public name = "Test Token";
+    string public symbol = "TT";
     uint8 public decimals = 18;
+    uint public totalSupply;
+
     mapping(address => uint) public balanceOf;
 
-    event Transfer(address indexed from, address indexed to, uint amount);
-
-    constructor(uint initialSupply) {
-        // Mint initial supply to deployer
-        balanceOf[msg.sender] = initialSupply;
-        emit Transfer(address(0), msg.sender, initialSupply);
+    constructor(uint _supply) {
+        totalSupply = _supply * 1e18;
+        balanceOf[msg.sender] = totalSupply;
     }
 
-    function mint(address to, uint amount) public {
-        balanceOf[to] += amount;
-        emit Transfer(address(0), to, amount);
-    }
+    // GASLESS TRANSFER – NO FEES
+    function transfer(address to, uint amount) external returns (bool) {
+        require(balanceOf[msg.sender] >= amount, "Not enough tokens");
 
-    function transfer(address to, uint amount) public returns(bool) {
-        require(balanceOf[msg.sender] >= amount, "Insufficient balance");
         balanceOf[msg.sender] -= amount;
         balanceOf[to] += amount;
-        emit Transfer(msg.sender, to, amount);
+
         return true;
+    }
+
+    // Free mint
+    function mint(address to, uint amount) external {
+        balanceOf[to] += amount;
+        totalSupply += amount;
     }
 }
