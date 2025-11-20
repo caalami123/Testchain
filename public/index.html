@@ -1,174 +1,285 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Ethereum Test Wallet</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Laam Gasless Wallet (Test)</title>
 <style>
-body{margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#fff;}
-.center-box{max-width:400px;margin:50px auto;padding:20px;border-radius:15px;background:#1e293b;text-align:center;}
-.btn{width:100%;padding:12px;margin:6px 0;border:none;border-radius:10px;background:#3b82f6;color:#fff;font-weight:bold;font-size:16px;cursor:pointer;}
-.btn:hover{background:#1d4ed8;}
-.input{width:100%;padding:10px;margin:6px 0;border-radius:10px;border:none;background:#334155;color:#fff;}
-.dashboard{max-width:480px;margin:20px auto;padding:20px;border-radius:15px;background:#1e293b;display:none;}
-.balance-box{background:#3b82f6;padding:12px;border-radius:10px;margin:12px 0;font-weight:bold;text-align:center;}
-.block{background:#0f172a;padding:10px;margin:8px 0;border-radius:10px;border-left:4px solid #3b82f6;font-size:12px;}
+  :root{--bg:#0f172a;--card:#1e293b;--muted:#94a3b8;--accent:#3b82f6}
+  body{margin:0;font-family:Inter,Arial,sans-serif;background:var(--bg);color:#fff;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:420px;margin:28px auto;padding:18px}
+  .card{background:var(--card);border-radius:12px;padding:16px;box-shadow:0 6px 18px rgba(2,6,23,0.6)}
+  h1{margin:0 0 12px;font-size:20px}
+  .btn{width:100%;padding:12px;border-radius:10px;border:0;background:var(--accent);color:#fff;font-weight:600;margin:8px 0;cursor:pointer}
+  .btn.danger{background:#ef4444}
+  .input{width:100%;padding:10px;border-radius:10px;border:0;margin:8px 0;background:#0b1220;color:#fff}
+  .small{font-size:13px;color:var(--muted);margin-top:6px}
+  pre{white-space:pre-wrap;word-break:break-word;background:#0b1220;padding:10px;border-radius:8px}
+  .row{display:flex;gap:8px}
+  .col{flex:1}
+  .block{background:#071025;padding:10px;border-radius:8px;margin-top:10px}
+  .hidden{display:none}
+  footer{color:var(--muted);text-align:center;margin-top:14px;font-size:13px}
 </style>
 </head>
 <body>
+<div class="wrap">
 
-<!-- Welcome -->
-<div id="welcome" class="center-box">
-<h2>Ethereum Test Wallet</h2>
-<button class="btn" onclick="createWallet()">Create New Wallet</button>
-<input id="importKey" class="input" placeholder="Enter Private Key">
-<button class="btn" onclick="importWallet()">Import Wallet</button>
-</div>
+  <!-- WELCOME (create / import) -->
+  <div id="view-welcome" class="card">
+    <h1>Laam Gasless Wallet — Welcome</h1>
+    <button class="btn" id="btnCreate">Create New Wallet</button>
+    <input id="importKey" class="input" placeholder="Paste Private Key (optional)"/>
+    <button class="btn" id="btnImport">Import Wallet</button>
+    <p class="small">Note: This is a local gasless test. Tokens and transfers are free.</p>
+  </div>
 
-<!-- PIN -->
-<div id="pinScreen" class="center-box" style="display:none;">
-<h2>Enter PIN</h2>
-<input id="pinInput" class="input" type="password" maxlength="6" placeholder="PIN">
-<button class="btn" onclick="unlockWallet()">Unlock</button>
-</div>
+  <!-- PIN screen -->
+  <div id="view-pin" class="card hidden">
+    <h1>Enter PIN</h1>
+    <input id="pinInput" type="password" maxlength="6" class="input" placeholder="4–6 digit PIN"/>
+    <button class="btn" id="btnUnlock">Unlock Wallet</button>
+    <button class="btn" id="btnBackToWelcome" style="background:#374151">Back</button>
+  </div>
 
-<!-- Dashboard -->
-<div id="dashboard" class="dashboard">
-<button class="btn" style="background:#ef4444;margin-bottom:12px;" onclick="resetWallet()">Reset Wallet</button>
-<div id="walletInfo"></div>
-<div id="balance" class="balance-box">Balance: 0 ETH</div>
+  <!-- DASHBOARD -->
+  <div id="view-dashboard" class="card hidden">
+    <div style="display:flex;justify-content:space-between;align-items:center">
+      <h1>Dashboard</h1>
+      <button class="btn danger" id="btnReset" style="width:auto;padding:8px 12px">Reset</button>
+    </div>
 
-<h3>Send ETH</h3>
-<input id="receiver" class="input" placeholder="Receiver Address">
-<input id="amount" class="input" type="number" placeholder="Amount ETH">
-<button class="btn" onclick="sendEth()">Send</button>
+    <div id="walletInfo" class="block">
+      <strong id="addrTitle">Address:</strong><br/>
+      <pre id="addrVal">—</pre>
+      <small class="small">Private key stored locally (for test only)</small>
+    </div>
 
-<h3>Ledger</h3>
-<div id="ledger" style="max-height:300px;overflow-y:auto;"></div>
+    <div id="balanceBox" class="block">Balance: <strong id="balVal">0</strong> TT</div>
+
+    <h3 style="margin:12px 0 6px">Send Token</h3>
+    <input id="toAddr" class="input" placeholder="Receiver address (exact)"/>
+    <div class="row">
+      <input id="sendAmt" class="input col" placeholder="Amount" type="number" min="0" step="any"/>
+      <button class="btn" id="btnSend" style="width:120px">Send</button>
+    </div>
+
+    <h3 style="margin-top:12px">Ledger</h3>
+    <div id="ledgerList" class="block">No transactions yet.</div>
+  </div>
+
+  <footer>Test network — Gasless mode • Not for production</footer>
 </div>
 
 <script>
-const SERVER_URL = 'http://127.0.0.1:8545';
-let currentWallet = null;
-let ledger = [];
+/*
+  Frontend for gasless backend.
+  Expected backend endpoints:
+    POST /createWallet             -> { address, privateKey }
+    POST /importWallet             -> { address, privateKey } or { error }
+    GET  /balance/:address         -> { balance }
+    POST /send                     -> { status } or { error }
+*/
 
-// Check if first time minting
-function checkGenesisMint(address){
-    const mintedWallets = JSON.parse(localStorage.getItem('mintedWallets')||'[]');
-    if(!mintedWallets.includes(address)){
-        mintedWallets.push(address);
-        localStorage.setItem('mintedWallets', JSON.stringify(mintedWallets));
-        return true; // mint first time
-    }
-    return false; // already minted
+const API = location.origin; // change to 'http://localhost:3000' if backend on different port
+
+// UI elements
+const viewWelcome = document.getElementById('view-welcome');
+const viewPin = document.getElementById('view-pin');
+const viewDashboard = document.getElementById('view-dashboard');
+
+const btnCreate = document.getElementById('btnCreate');
+const btnImport = document.getElementById('btnImport');
+const importKeyInput = document.getElementById('importKey');
+const btnUnlock = document.getElementById('btnUnlock');
+const pinInput = document.getElementById('pinInput');
+const btnBackToWelcome = document.getElementById('btnBackToWelcome');
+
+const walletInfoPre = document.getElementById('addrVal');
+const balVal = document.getElementById('balVal');
+const ledgerList = document.getElementById('ledgerList');
+const btnReset = document.getElementById('btnReset');
+const btnSend = document.getElementById('btnSend');
+const toAddr = document.getElementById('toAddr');
+const sendAmt = document.getElementById('sendAmt');
+
+let currentWallet = null;   // { address, privateKey, pin }
+let ledger = [];            // local tx history (mirror of backend ledger)
+
+// Helpers
+function show(view){
+  viewWelcome.classList.add('hidden');
+  viewPin.classList.add('hidden');
+  viewDashboard.classList.add('hidden');
+  view.classList.remove('hidden');
 }
 
-// Helper: update dashboard balance
-function updateBalance(){
-    if(!currentWallet) return;
-    let bal = ledger.filter(tx=>tx.to===currentWallet.address).reduce((a,b)=>a+b.amount,0) -
-              ledger.filter(tx=>tx.from===currentWallet.address).reduce((a,b)=>a+b.amount,0);
-    document.getElementById('balance').innerText = 'Balance: ' + bal + ' ETH';
+function saveLocalWallet(w){
+  localStorage.setItem('laam_wallet', JSON.stringify(w));
+}
+function loadLocalWallet(){
+  try { return JSON.parse(localStorage.getItem('laam_wallet')||'null'); }
+  catch(e){ return null; }
+}
+function saveLedgerLocal(){
+  localStorage.setItem('laam_ledger', JSON.stringify(ledger));
+}
+function loadLedgerLocal(){
+  try { ledger = JSON.parse(localStorage.getItem('laam_ledger')||'[]'); }
+  catch(e){ ledger = []; }
 }
 
-// Render ledger
+// UI render
+function renderWallet(){
+  if(!currentWallet) return;
+  walletInfoPre.textContent = `${currentWallet.address}\n\n${currentWallet.privateKey}`;
+}
+function renderBalance(b){
+  balVal.textContent = (typeof b === 'number' ? b : b.toString());
+}
 function renderLedger(){
-    const div = document.getElementById('ledger');
-    div.innerHTML = '';
-    ledger.forEach((tx,i)=>{
-        div.innerHTML += `<div class="block"><b>Tx #${i}</b><br>From: ${tx.from}<br>To: ${tx.to}<br>Amount: ${tx.amount} ETH</div>`;
-    });
+  if(!ledger.length){ ledgerList.innerText = 'No transactions yet.'; return; }
+  ledgerList.innerHTML = ledger.slice().reverse().map((tx,i)=>{
+    const when = new Date(tx.time||Date.now()).toLocaleString();
+    return `<div style="margin-bottom:8px;padding:8px;background:#071025;border-radius:8px">
+      <div><strong>From:</strong> ${tx.from}</div>
+      <div><strong>To:</strong> ${tx.to}</div>
+      <div><strong>Amount:</strong> ${tx.amount}</div>
+      <div style="font-size:12px;color:#94a3b8">${when}</div>
+    </div>`;
+  }).join('');
 }
 
-// Create wallet
-function createWallet(){
-    const pk = 'PRIV-'+Math.random().toString(36).slice(2,16);
-    const address = 'WALLET-'+Math.random().toString(36).slice(2,10);
-    const pin = prompt('Create PIN:');
-    if(!pin||pin.length<4){ alert('Invalid PIN'); return; }
-    currentWallet = { privateKey: pk, address, pin };
-
-    // First time mint
-    if(checkGenesisMint(address)){
-        const genesisTx = { from:'GENESIS', to:address, amount:100 };
-        ledger.push(genesisTx);
-        localStorage.setItem('ledger', JSON.stringify(ledger));
-    }
-
-    localStorage.setItem('wallet', JSON.stringify(currentWallet));
-    switchToDashboard();
+// API wrappers
+async function apiCreateWallet(){
+  const res = await fetch(API + '/createWallet', { method:'POST' });
+  return res.json();
+}
+async function apiImportWallet(privateKey){
+  const res = await fetch(API + '/importWallet', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ privateKey })
+  });
+  return res.json();
+}
+async function apiBalance(addr){
+  const res = await fetch(API + '/balance/' + encodeURIComponent(addr));
+  return res.json();
+}
+async function apiSend(fromPrivateKey,to,amount){
+  const res = await fetch(API + '/send', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({ fromPrivateKey, to, amount })
+  });
+  return res.json();
 }
 
-// Import wallet
-function importWallet(){
-    const key = document.getElementById('importKey').value.trim();
-    if(!key.startsWith('PRIV-')){ alert('Invalid Key'); return; }
-    const pin = prompt('Set PIN:');
-    const address = 'WALLET-'+key.slice(5,12);
-    currentWallet = { privateKey:key, address, pin };
+// Event handlers
+btnCreate.addEventListener('click', async ()=>{
+  btnCreate.disabled = true;
+  btnCreate.textContent = 'Creating...';
+  try{
+    const data = await apiCreateWallet();
+    if(data.error) return alert('Error: '+data.error);
+    // store wallet but require PIN
+    currentWallet = { address: data.address, privateKey: data.privateKey, pin: null };
+    saveLocalWallet(currentWallet);
+    show(viewPin);
+  }catch(e){
+    alert('Create failed: '+e.message);
+  } finally {
+    btnCreate.disabled = false;
+    btnCreate.textContent = 'Create New Wallet';
+  }
+});
 
-    // First time mint if not yet minted
-    if(checkGenesisMint(address)){
-        const genesisTx = { from:'GENESIS', to:address, amount:100 };
-        ledger.push(genesisTx);
-        localStorage.setItem('ledger', JSON.stringify(ledger));
-    }
+btnImport.addEventListener('click', async ()=>{
+  const key = importKeyInput.value.trim();
+  if(!key) return alert('Paste a private key to import');
+  btnImport.disabled = true;
+  try{
+    const data = await apiImportWallet(key);
+    if(data.error) { alert('Import error: ' + data.error); return; }
+    currentWallet = { address: data.address, privateKey: data.privateKey, pin: null };
+    saveLocalWallet(currentWallet);
+    show(viewPin);
+  }catch(e){
+    alert('Import failed: ' + e.message);
+  } finally { btnImport.disabled = false; }
+});
 
-    localStorage.setItem('wallet', JSON.stringify(currentWallet));
-    switchToDashboard();
-}
+btnUnlock.addEventListener('click', ()=>{
+  const p = pinInput.value.trim();
+  if(!p || p.length < 4) return alert('PIN should be 4+ characters');
+  let w = loadLocalWallet();
+  if(!w) return alert('No wallet saved. Create or import first.');
+  w.pin = p;
+  currentWallet = w;
+  saveLocalWallet(w);
+  show(viewDashboard);
+  loadLedgerLocal();
+  renderWallet();
+  refreshBalanceAndLedger();
+});
 
-// Unlock wallet
-function unlockWallet(){
-    const data = JSON.parse(localStorage.getItem('wallet'));
-    const entered = document.getElementById('pinInput').value;
-    if(!data || entered !== data.pin){ alert('Wrong PIN'); return; }
-    currentWallet = data;
-    switchToDashboard();
-}
+btnBackToWelcome.addEventListener('click', ()=>{ show(viewWelcome); });
 
-// Reset wallet
-function resetWallet(){
-    if(!confirm('Reset wallet?')) return;
-    localStorage.removeItem('wallet');
-    currentWallet = null;
-    ledger = [];
-    document.getElementById('dashboard').style.display = 'none';
-    document.getElementById('welcome').style.display = 'block';
-}
+btnReset.addEventListener('click', ()=>{
+  if(!confirm('Reset wallet and clear local data?')) return;
+  localStorage.removeItem('laam_wallet');
+  localStorage.removeItem('laam_ledger');
+  currentWallet = null;
+  ledger = [];
+  show(viewWelcome);
+});
 
-// Switch to dashboard
-function switchToDashboard(){
-    document.getElementById('welcome').style.display='none';
-    document.getElementById('pinScreen').style.display='none';
-    document.getElementById('dashboard').style.display='block';
-    document.getElementById('walletInfo').innerText = `Address: ${currentWallet.address}\nPrivate Key: ${currentWallet.privateKey}`;
-    fetchLedger();
-}
-
-// Fetch ledger
-function fetchLedger(){
-    ledger = JSON.parse(localStorage.getItem('ledger')||'[]');
-    updateBalance();
+// Send token
+btnSend.addEventListener('click', async ()=>{
+  if(!currentWallet) return alert('Unlock first');
+  const to = toAddr.value.trim(); const amt = Number(sendAmt.value);
+  if(!to || !amt || amt <= 0) return alert('Enter valid to-address and amount');
+  btnSend.disabled = true;
+  try{
+    const res = await apiSend(currentWallet.privateKey, to, amt);
+    if(res.error) { alert('Error sending tokens: ' + res.error); return; }
+    // append local ledger record (backend may also keep ledger)
+    ledger.push({ from: currentWallet.address, to, amount: amt, time: Date.now() });
+    saveLedgerLocal();
     renderLedger();
+    await refreshBalanceAndLedger();
+    alert('Sent ✔ tx: ' + (res.txHash || 'OK'));
+  } catch(e){
+    alert('Send failed: ' + e.message);
+  } finally { btnSend.disabled = false; }
+});
+
+// Refresh balance & fetch ledger (ledger read from localStorage here)
+// We call backend for balance
+async function refreshBalanceAndLedger(){
+  if(!currentWallet) return;
+  try{
+    const d = await apiBalance(currentWallet.address);
+    if(d.error) renderBalance('err');
+    else renderBalance(Number(d.balance));
+  } catch(e){
+    console.warn(e);
+  }
+  renderLedger();
 }
 
-// Send ETH
-function sendEth(){
-    if(!currentWallet){ alert('Create or unlock wallet'); return; }
-    const to = document.getElementById('receiver').value.trim();
-    const amount = Number(document.getElementById('amount').value);
-    if(!to.startsWith('WALLET-')){ alert('Invalid receiver'); return; }
-    if(amount<=0){ alert('Invalid amount'); return; }
-
-    const tx = { from: currentWallet.address, to, amount };
-    ledger.push(tx);
-    localStorage.setItem('ledger', JSON.stringify(ledger));
-    alert('Sent!');
-    updateBalance();
-    renderLedger();
-}
+// Startup: if wallet exists, prompt PIN screen
+(function init(){
+  const w = loadLocalWallet();
+  if(w) {
+    // show PIN screen to unlock
+    show(viewPin);
+  } else {
+    show(viewWelcome);
+  }
+  loadLedgerLocal();
+})();
 </script>
-
 </body>
 </html>
