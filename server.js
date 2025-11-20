@@ -1,55 +1,61 @@
 const express = require('express');
 const { ethers } = require('ethers');
-const bodyParser = require('body-parser');
+require('dotenv').config();
+
 const app = express();
-app.use(bodyParser.json());
-app.use(express.static('public'));
+app.use(express.json());
 
-// --- Ethereum provider (Goerli testnet) ---
-const provider = new ethers.JsonRpcProvider("https://sepolia.infura.io/v3/YOUR_INFURA_PROJECT_ID");
+const PORT = process.env.PORT || 3000;
 
-// --- Wallet creation endpoint ---
-app.post('/createWallet', (req,res)=>{
+// Connect to local Hardhat fork
+const provider = new ethers.JsonRpcProvider("http://127.0.0.1:8545");
+
+// Temporary in-memory wallet storage
+let wallets = {};
+
+// Create new wallet
+app.post('/createWallet', async (req, res) => {
     const wallet = ethers.Wallet.createRandom();
+    wallets[wallet.address] = wallet.privateKey;
     res.json({ address: wallet.address, privateKey: wallet.privateKey });
 });
 
-// --- Import wallet endpoint ---
-app.post('/importWallet', (req,res)=>{
+// Import wallet
+app.post('/importWallet', async (req, res) => {
     const { privateKey } = req.body;
     try {
         const wallet = new ethers.Wallet(privateKey, provider);
+        wallets[wallet.address] = wallet.privateKey;
         res.json({ address: wallet.address, privateKey: wallet.privateKey });
-    } catch(e){
-        res.status(400).json({ error: "Invalid private key" });
+    } catch (err) {
+        res.json({ error: 'Invalid private key' });
     }
 });
 
-// --- Send ETH transaction ---
-app.post('/sendEth', async (req,res)=>{
+// Check balance
+app.get('/balance/:address', async (req, res) => {
+    try {
+        const balance = await provider.getBalance(req.params.address);
+        res.json({ balance: ethers.formatEther(balance) });
+    } catch (err) {
+        res.json({ error: 'Address not found' });
+    }
+});
+
+// Send ETH
+app.post('/sendEth', async (req, res) => {
     const { fromPrivateKey, to, amount } = req.body;
-    try{
+    try {
         const wallet = new ethers.Wallet(fromPrivateKey, provider);
         const tx = await wallet.sendTransaction({
             to,
             value: ethers.parseEther(amount.toString())
         });
         await tx.wait();
-        res.json({ success:true, txHash: tx.hash });
-    }catch(e){
-        res.status(400).json({ error: e.message });
+        res.json({ txHash: tx.hash });
+    } catch (err) {
+        res.json({ error: err.message });
     }
 });
 
-// --- Check balance ---
-app.get('/balance/:address', async (req,res)=>{
-    try{
-        const balance = await provider.getBalance(req.params.address);
-        res.json({ balance: ethers.formatEther(balance) });
-    }catch(e){
-        res.status(400).json({ error:e.message });
-    }
-});
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, ()=>console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
