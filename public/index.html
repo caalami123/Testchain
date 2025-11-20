@@ -5,74 +5,170 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Ethereum Test Wallet</title>
 <style>
-body{font-family:Arial;margin:20px;} input, button{margin:5px;padding:10px;}
+body{margin:0;font-family:Arial,sans-serif;background:#0f172a;color:#fff;}
+.center-box{max-width:400px;margin:50px auto;padding:20px;border-radius:15px;background:#1e293b;text-align:center;}
+.btn{width:100%;padding:12px;margin:6px 0;border:none;border-radius:10px;background:#3b82f6;color:#fff;font-weight:bold;font-size:16px;cursor:pointer;}
+.btn:hover{background:#1d4ed8;}
+.input{width:100%;padding:10px;margin:6px 0;border-radius:10px;border:none;background:#334155;color:#fff;}
+.dashboard{max-width:480px;margin:20px auto;padding:20px;border-radius:15px;background:#1e293b;display:none;}
+.balance-box{background:#3b82f6;padding:12px;border-radius:10px;margin:12px 0;font-weight:bold;text-align:center;}
+.block{background:#0f172a;padding:10px;margin:8px 0;border-radius:10px;border-left:4px solid #3b82f6;font-size:12px;}
 </style>
 </head>
 <body>
-<h2>Ethereum Test Wallet</h2>
 
-<div>
-    <button onclick="createWallet()">Create Wallet</button>
-    <input id="importKey" placeholder="Private Key">
-    <button onclick="importWallet()">Import Wallet</button>
+<!-- Welcome -->
+<div id="welcome" class="center-box">
+<h2>Ethereum Test Wallet</h2>
+<button class="btn" onclick="createWallet()">Create New Wallet</button>
+<input id="importKey" class="input" placeholder="Enter Private Key">
+<button class="btn" onclick="importWallet()">Import Wallet</button>
 </div>
 
+<!-- PIN -->
+<div id="pinScreen" class="center-box" style="display:none;">
+<h2>Enter PIN</h2>
+<input id="pinInput" class="input" type="password" maxlength="6" placeholder="PIN">
+<button class="btn" onclick="unlockWallet()">Unlock</button>
+</div>
+
+<!-- Dashboard -->
+<div id="dashboard" class="dashboard">
+<button class="btn" style="background:#ef4444;margin-bottom:12px;" onclick="resetWallet()">Reset Wallet</button>
 <div id="walletInfo"></div>
+<div id="balance" class="balance-box">Balance: 0 ETH</div>
 
 <h3>Send ETH</h3>
-<input id="receiver" placeholder="Receiver Address">
-<input id="amount" type="number" placeholder="Amount ETH">
-<button onclick="sendEth()">Send</button>
+<input id="receiver" class="input" placeholder="Receiver Address">
+<input id="amount" class="input" type="number" placeholder="Amount ETH">
+<button class="btn" onclick="sendEth()">Send</button>
 
-<h3>Balance</h3>
-<button onclick="checkBalance()">Check Balance</button>
-<div id="balance"></div>
+<h3>Ledger</h3>
+<div id="ledger" style="max-height:300px;overflow-y:auto;"></div>
+</div>
 
 <script>
-const SERVER_URL = location.origin;
+const SERVER_URL = 'http://127.0.0.1:8545';
 let currentWallet = null;
+let ledger = [];
 
-async function createWallet(){
-    const res = await fetch(`${SERVER_URL}/createWallet`, {method:'POST'});
-    const data = await res.json();
-    currentWallet = data;
-    document.getElementById('walletInfo').innerText = `Address: ${data.address}\nPrivate Key: ${data.privateKey}`;
+// Check if first time minting
+function checkGenesisMint(address){
+    const mintedWallets = JSON.parse(localStorage.getItem('mintedWallets')||'[]');
+    if(!mintedWallets.includes(address)){
+        mintedWallets.push(address);
+        localStorage.setItem('mintedWallets', JSON.stringify(mintedWallets));
+        return true; // mint first time
+    }
+    return false; // already minted
 }
 
-async function importWallet(){
-    const key = document.getElementById('importKey').value.trim();
-    const res = await fetch(`${SERVER_URL}/importWallet`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ privateKey: key })
+// Helper: update dashboard balance
+function updateBalance(){
+    if(!currentWallet) return;
+    let bal = ledger.filter(tx=>tx.to===currentWallet.address).reduce((a,b)=>a+b.amount,0) -
+              ledger.filter(tx=>tx.from===currentWallet.address).reduce((a,b)=>a+b.amount,0);
+    document.getElementById('balance').innerText = 'Balance: ' + bal + ' ETH';
+}
+
+// Render ledger
+function renderLedger(){
+    const div = document.getElementById('ledger');
+    div.innerHTML = '';
+    ledger.forEach((tx,i)=>{
+        div.innerHTML += `<div class="block"><b>Tx #${i}</b><br>From: ${tx.from}<br>To: ${tx.to}<br>Amount: ${tx.amount} ETH</div>`;
     });
-    const data = await res.json();
-    if(data.error){ alert(data.error); return; }
-    currentWallet = data;
-    document.getElementById('walletInfo').innerText = `Address: ${data.address}\nPrivate Key: ${data.privateKey}`;
 }
 
-async function sendEth(){
-    if(!currentWallet){ alert('Create or import wallet first'); return; }
+// Create wallet
+function createWallet(){
+    const pk = 'PRIV-'+Math.random().toString(36).slice(2,16);
+    const address = 'WALLET-'+Math.random().toString(36).slice(2,10);
+    const pin = prompt('Create PIN:');
+    if(!pin||pin.length<4){ alert('Invalid PIN'); return; }
+    currentWallet = { privateKey: pk, address, pin };
+
+    // First time mint
+    if(checkGenesisMint(address)){
+        const genesisTx = { from:'GENESIS', to:address, amount:100 };
+        ledger.push(genesisTx);
+        localStorage.setItem('ledger', JSON.stringify(ledger));
+    }
+
+    localStorage.setItem('wallet', JSON.stringify(currentWallet));
+    switchToDashboard();
+}
+
+// Import wallet
+function importWallet(){
+    const key = document.getElementById('importKey').value.trim();
+    if(!key.startsWith('PRIV-')){ alert('Invalid Key'); return; }
+    const pin = prompt('Set PIN:');
+    const address = 'WALLET-'+key.slice(5,12);
+    currentWallet = { privateKey:key, address, pin };
+
+    // First time mint if not yet minted
+    if(checkGenesisMint(address)){
+        const genesisTx = { from:'GENESIS', to:address, amount:100 };
+        ledger.push(genesisTx);
+        localStorage.setItem('ledger', JSON.stringify(ledger));
+    }
+
+    localStorage.setItem('wallet', JSON.stringify(currentWallet));
+    switchToDashboard();
+}
+
+// Unlock wallet
+function unlockWallet(){
+    const data = JSON.parse(localStorage.getItem('wallet'));
+    const entered = document.getElementById('pinInput').value;
+    if(!data || entered !== data.pin){ alert('Wrong PIN'); return; }
+    currentWallet = data;
+    switchToDashboard();
+}
+
+// Reset wallet
+function resetWallet(){
+    if(!confirm('Reset wallet?')) return;
+    localStorage.removeItem('wallet');
+    currentWallet = null;
+    ledger = [];
+    document.getElementById('dashboard').style.display = 'none';
+    document.getElementById('welcome').style.display = 'block';
+}
+
+// Switch to dashboard
+function switchToDashboard(){
+    document.getElementById('welcome').style.display='none';
+    document.getElementById('pinScreen').style.display='none';
+    document.getElementById('dashboard').style.display='block';
+    document.getElementById('walletInfo').innerText = `Address: ${currentWallet.address}\nPrivate Key: ${currentWallet.privateKey}`;
+    fetchLedger();
+}
+
+// Fetch ledger
+function fetchLedger(){
+    ledger = JSON.parse(localStorage.getItem('ledger')||'[]');
+    updateBalance();
+    renderLedger();
+}
+
+// Send ETH
+function sendEth(){
+    if(!currentWallet){ alert('Create or unlock wallet'); return; }
     const to = document.getElementById('receiver').value.trim();
     const amount = Number(document.getElementById('amount').value);
-    const res = await fetch(`${SERVER_URL}/sendEth`, {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ fromPrivateKey: currentWallet.privateKey, to, amount })
-    });
-    const data = await res.json();
-    if(data.error) alert(data.error);
-    else alert('Transaction Hash: ' + data.txHash);
-}
+    if(!to.startsWith('WALLET-')){ alert('Invalid receiver'); return; }
+    if(amount<=0){ alert('Invalid amount'); return; }
 
-async function checkBalance(){
-    if(!currentWallet){ alert('Create or import wallet first'); return; }
-    const res = await fetch(`${SERVER_URL}/balance/${currentWallet.address}`);
-    const data = await res.json();
-    if(data.error) alert(data.error);
-    else document.getElementById('balance').innerText = `${data.balance} ETH`;
+    const tx = { from: currentWallet.address, to, amount };
+    ledger.push(tx);
+    localStorage.setItem('ledger', JSON.stringify(ledger));
+    alert('Sent!');
+    updateBalance();
+    renderLedger();
 }
 </script>
+
 </body>
 </html>
